@@ -1,0 +1,14 @@
+C:\Users\Welcome\Desktop\hemoscan\backend\src\main\java\com\anemia\model\Analysis.java
+C:\Users\Welcome\Desktop\hemoscan\backend\src\main\java\com\anemia\config\SecurityConfig.java
+C:\Users\Welcome\Desktop\hemoscan\backend\src\main\java\com\anemia\repository\AnalysisRepository.java
+C:\Users\Welcome\Desktop\hemoscan\backend\src\main\java\com\anemia\config\GlobalExceptionHandler.java
+C:\Users\Welcome\Desktop\hemoscan\backend\src\main\java\com\anemia\controller\UserController.java
+C:\Users\Welcome\Desktop\hemoscan\backend\src\main\java\com\anemia\service\AnemiaDetectionService.java
+C:\Users\Welcome\Desktop\hemoscan\backend\src\main\java\com\anemia\model\Role.java
+C:\Users\Welcome\Desktop\hemoscan\backend\src\main\java\com\anemia\HemoScanApplication.java
+C:\Users\Welcome\Desktop\hemoscan\backend\src\main\java\com\anemia\controller\AuthController.java
+C:\Users\Welcome\Desktop\hemoscan\backend\src\main\java\com\anemia\model\User.java
+C:\Users\Welcome\Desktop\hemoscan\backend\src\main\java\com\anemia\controller\AnalysisController.java
+C:\Users\Welcome\Desktop\hemoscan\backend\src\main\java\com\anemia\repository\UserRepository.java
+C:\Users\Welcome\Desktop\hemoscan\backend\src\main\java\com\anemia\security\JwtService.java
+C:\Users\Welcome\Desktop\hemoscan\backend\src\main\java\com\anemia\security\JwtAuthFilter.java

@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HemoScan AI — Anemia Detection</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .tip-box {
+      background: rgba(255,209,102,0.06);
+      border: 1px solid rgba(255,209,102,0.2);
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      font-size: 0.78rem;
+      color: #aaa;
+      line-height: 1.7;
+    }
+    .tip-box strong { color: #ffd166; }
+    .img-capture-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    @media(max-width:680px){ .img-capture-grid { grid-template-columns: 1fr; } }
+    .img-capture-card {
+      background: var(--card-bg, #18181f);
+      border: 1px solid var(--border, #2a2a3a);
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .img-capture-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; }
+    .img-capture-card .capture-desc { font-size: 0.72rem; color: #888; margin-bottom: 14px; line-height: 1.6; }
+    .capture-zone {
+      position: relative; width: 100%; aspect-ratio: 1;
+      border-radius: 10px; overflow: hidden;
+      background: #111; border: 2px dashed #2a2a3a;
+      cursor: pointer; transition: border-color .2s;
+    }
+    .capture-zone:hover { border-color: #e03c52; }
+    .capture-zone video, .capture-zone img.cap-preview {
+      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    }
+    .cap-placeholder {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 8px; pointer-events: none;
+    }
+    .cap-placeholder .cap-icon { font-size: 2.2rem; opacity: .35; }
+    .cap-placeholder .cap-hint { font-size: 0.65rem; color: #666; text-align: center; }
+    .cap-result-overlay {
+      position: absolute; inset: 0;
+      background: rgba(10,10,15,0.82);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 6px; backdrop-filter: blur(3px); border-radius: 10px;
+    }
+    .cap-result-overlay .ov-icon { font-size: 2rem; }
+    .cap-result-overlay .ov-text { font-weight: 700; font-size: 0.9rem; }
+    .cap-result-overlay .ov-conf { font-size: 0.68rem; color: #888; }
+    .cap-result-overlay.anemic .ov-text { color: #e03c52; }
+    .cap-result-overlay.normal  .ov-text { color: #00e5a0; }
+    .cap-btns { display: flex; gap: 8px; margin-top: 10px; }
+    .cap-btn {
+      flex: 1; padding: 8px 6px; border-radius: 8px;
+      border: 1px solid #2a2a3a; background: #111; color: #ccc;
+      cursor: pointer; font-size: 0.75rem; font-family: inherit; font-weight: 600;
+      transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 4px;
+    }
+    .cap-btn:hover { border-color: #e03c52; color: #e03c52; }
+    .file-input { display: none; }
+    .combined-result {
+      background: var(--card-bg, #18181f);
+      border: 1px solid var(--border, #2a2a3a);
+      border-radius: 14px; padding: 24px; margin-bottom: 22px; display: none;
+    }
+    .combined-result.show { display: block; }
+    .combined-result h3 { font-size: 1rem; font-weight: 700; margin-bottom: 18px; }
+    .score-bar-row { margin-bottom: 14px; }
+    .score-bar-label { display: flex; justify-content: space-between; font-size: 0.72rem; color: #888; margin-bottom: 5px; }
+    .score-bar-track { height: 8px; background: #111; border-radius: 4px; overflow: hidden; }
+    .score-bar-fill { height: 100%; border-radius: 4px; transition: width 1s ease; }
+    .score-bar-fill.red   { background: linear-gradient(90deg,#e03c52,#ff6b7a); }
+    .score-bar-fill.green { background: linear-gradient(90deg,#00b87a,#00e5a0); }
+    .score-signals { font-size: 0.64rem; color: #666; margin-top: 4px; line-height: 1.6; }
+    .final-verdict { padding: 18px; border-radius: 10px; text-align: center; margin-top: 16px; }
+    .final-verdict.anemic { background: rgba(224,60,82,0.08); border: 1px solid rgba(224,60,82,0.2); }
+    .final-verdict.normal  { background: rgba(0,229,160,0.08);  border: 1px solid rgba(0,229,160,0.2); }
+    .verdict-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.5px; color: #666; margin-bottom: 6px; }
+    .verdict-type { font-size: 1.3rem; font-weight: 800; }
+    .verdict-type.anemic { color: #e03c52; }
+    .verdict-type.normal  { color: #00e5a0; }
+    .verdict-conf { font-size: 0.72rem; color: #888; margin-top: 4px; }
+    .verdict-note { font-size: 0.68rem; color: #666; margin-top: 10px; line-height: 1.6; }
+    .cam-modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.88);
+      z-index: 9999; display: none;
+      align-items: center; justify-content: center; backdrop-filter: blur(8px);
+    }
+    .cam-modal-overlay.open { display: flex; }
+    .cam-modal {
+      background: #18181f; border: 1px solid #2a2a3a;
+      border-radius: 18px; padding: 28px; width: 90%; max-width: 460px; position: relative;
+    }
+    .cam-modal h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
+    .cam-modal p  { font-size: 0.72rem; color: #888; margin-bottom: 16px; line-height: 1.6; }
+    .cam-video-wrap { width: 100%; aspect-ratio: 4/3; background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+    .cam-video-wrap video { width: 100%; height: 100%; object-fit: cover; }
+    .cam-modal-btns { display: flex; gap: 10px; }
+    .btn-capture {
+      flex: 1; padding: 12px; background: #e03c52; border: none;
+      color: white; border-radius: 10px; font-family: inherit;
+      font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: background .2s;
+    }
+    .btn-capture:hover { background: #ff5566; }
+    .btn-cam-cancel {
+      padding: 12px 18px; background: transparent; border: 1px solid #2a2a3a;
+      color: #888; border-radius: 10px; cursor: pointer; font-family: inherit;
+      font-weight: 600; transition: all .2s;
+    }
+    .btn-cam-cancel:hover { border-color: #e03c52; color: #e03c52; }
+    .cam-close { position: absolute; top: 14px; right: 14px; background: transparent; border: none; color: #888; font-size: 1.2rem; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+<div id="auth-overlay" class="auth-overlay">
+  <div class="auth-bg">
+    <div class="blob blob1"></div>
+    <div class="blob blob2"></div>
+    <div class="blob blob3"></div>
+    <div class="grid-overlay"></div>
+  </div>
+  <div class="auth-card">
+    <div class="auth-brand">
+      <span class="brand-icon">🩸</span>
+      <span class="brand-name">HemoScan<em>AI</em></span>
+    </div>
+    <div class="auth-panel" id="login-panel">
+      <h2>Welcome back</h2>
+      <p class="auth-sub">Sign in to access your diagnostics</p>
+      <div id="login-error" class="auth-error hidden"></div>
+      <div class="field-group">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com" />
+      </div>
+      <div class="field-group">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="••••••••" />
+      </div>
+      <button class="btn-primary" onclick="handleLogin()">
+        <span>Sign In</span><span class="btn-arrow">→</span>
+      </button>
+      <p class="auth-switch">No account? <a href="#" onclick="switchPanel('register')">Create one free</a></p>
+    </div>
+    <div class="auth-panel hidden" id="register-panel">
+      <h2>Create account</h2>
+      <p class="auth-sub">Start detecting anemia with AI</p>
+      <div id="register-error" class="auth-error hidden"></div>
+      <div class="field-row">
+        <div class="field-group">
+          <label>First Name</label>
+          <input type="text" id="reg-firstname" placeholder="Jane" />
+        </div>
+        <div class="field-group">
+          <label>Last Name</label>
+          <input type="text" id="reg-lastname" placeholder="Doe" />
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="you@example.com" />
+      </div>
+      <div class="field-group">
+        <label>Password</label>
+        <input type="password" id="reg-password" placeholder="Min. 8 characters" />
+      </div>
+      <div class="field-group">
+        <label>Role</label>
+        <select id="reg-role">
+          <option value="PATIENT">Patient</option>
+          <option value="DOCTOR">Doctor / Clinician</option>
+        </select>
+      </div>
+      <button class="btn-primary" onclick="handleRegister()">
+        <span>Create Account</span><span class="btn-arrow">→</span>
+      </button>
+      <p class="auth-switch">Already registered? <a href="#" onclick="switchPanel('login')">Sign in</a></p>
+    </div>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-icon">🩸</span>
+      <span class="brand-name">HemoScan<em>AI</em></span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-view="dashboard" onclick="navigate('dashboard',this)">
+        <span class="nav-icon">◈</span> Dashboard
+      </a>
+      <a href="#" class="nav-item" data-view="analyze" onclick="navigate('analyze',this)">
+        <span class="nav-icon">◎</span> New Analysis
+      </a>
+      <a href="#" class="nav-item" data-view="visual" onclick="navigate('visual',this)">
+        <span class="nav-icon">📷</span> Visual AI
+      </a>
+      <a href="#" class="nav-item" data-view="history" onclick="navigate('history',this)">
+        <span class="nav-icon">◷</span> History
+      </a>
+      <a href="#" class="nav-item" data-view="profile" onclick="navigate('profile',this)">
+        <span class="nav-icon">◉</span> Profile
+      </a>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-avatar" id="sidebar-avatar">J</div>
+      <div class="user-info">
+        <strong id="sidebar-name">Loading…</strong>
+        <span id="sidebar-role">—</span>
+      </div>
+      <button class="logout-btn" onclick="handleLogout()" title="Logout">⏻</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+
+    <!-- DASHBOARD -->
+    <section id="view-dashboard" class="view active">
+      <div class="page-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p class="page-sub">Your health at a glance</p>
+        </div>
+        <button class="btn-primary compact" onclick="navigate('analyze', document.querySelector('[data-view=analyze]'))">
+          + New Test
+        </button>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card accent-red">
+          <div class="stat-icon">🩸</div>
+          <div class="stat-body">
+            <span class="stat-label">Total Tests</span>
+            <span class="stat-value" id="stat-total">0</span>
+          </div>
+        </div>
+        <div class="stat-card accent-yellow">
+          <div class="stat-icon">⚠️</div>
+          <div class="stat-body">
+            <span class="stat-label">Anemia Detected</span>
+            <span class="stat-value" id="stat-positive">0</span>
+          </div>
+        </div>
+        <div class="stat-card accent-green">
+          <div class="stat-icon">✅</div>
+          <div class="stat-body">
+            <span class="stat-label">Normal Results</span>
+            <span class="stat-value" id="stat-negative">0</span>
+          </div>
+        </div>
+        <div class="stat-card accent-blue">
+          <div class="stat-icon">📅</div>
+          <div class="stat-body">
+            <span class="stat-label">Last Test</span>
+            <span class="stat-value small" id="stat-last">—</span>
+          </div>
+        </div>
+      </div>
+      <div class="dashboard-grid">
+        <div class="card" id="recent-results-card">
+          <div class="card-header"><h3>Recent Results</h3></div>
+          <div id="recent-list" class="result-list">
+            <p class="empty-state">No tests yet. Run your first analysis!</p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>About Anemia</h3></div>
+          <div class="info-block">
+            <p>Anemia occurs when you don't have enough healthy red blood cells to carry adequate oxygen to your body's tissues.</p>
+            <ul class="info-list">
+              <li>💡 Low hemoglobin is the primary indicator</li>
+              <li>💡 Common symptoms include fatigue & pallor</li>
+              <li>💡 Iron-deficiency is the most common type</li>
+              <li>💡 Early AI detection enables faster treatment</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BLOOD TEST ANALYSIS -->
+    <section id="view-analyze" class="view">
+      <div class="page-header">
+        <div>
+          <h1>New Analysis</h1>
+          <p class="page-sub">Enter blood test parameters for AI detection</p>
+        </div>
+      </div>
+      <div class="analyze-layout">
+        <div class="card analyze-card">
+          <div class="card-header"><h3>Blood Parameters</h3></div>
+          <div id="analyze-error" class="auth-error hidden"></div>
+          <div class="param-grid">
+            <div class="field-group">
+              <label>Hemoglobin (g/dL) <span class="hint">Normal: M 13.5–17.5 / F 12–15.5</span></label>
+              <input type="number" id="p-hgb" step="0.1" min="0" max="25" placeholder="e.g. 12.5" />
+            </div>
+            <div class="field-group">
+              <label>Hematocrit (%) <span class="hint">Normal: M 41–53 / F 36–46</span></label>
+              <input type="number" id="p-hct" step="0.1" min="0" max="70" placeholder="e.g. 38.0" />
+            </div>
+            <div class="field-group">
+              <label>MCV (fL) <span class="hint">Normal: 80–100 fL</span></label>
+              <input type="number" id="p-mcv" step="0.1" min="50" max="130" placeholder="e.g. 85.0" />
+            </div>
+            <div class="field-group">
+              <label>MCH (pg) <span class="hint">Normal: 27–33 pg</span></label>
+              <input type="number" id="p-mch" step="0.1" min="10" max="45" placeholder="e.g. 28.0" />
+            </div>
+            <div class="field-group">
+              <label>MCHC (g/dL) <span class="hint">Normal: 32–36 g/dL</span></label>
+              <input type="number" id="p-mchc" step="0.1" min="20" max="40" placeholder="e.g. 33.0" />
+            </div>
+            <div class="field-group">
+              <label>RBC (×10⁶/μL) <span class="hint">Normal: M 4.5–5.9 / F 4.1–5.1</span></label>
+              <input type="number" id="p-rbc" step="0.01" min="1" max="8" placeholder="e.g. 4.2" />
+            </div>
+            <div class="field-group">
+              <label>RDW (%) <span class="hint">Normal: 11.5–14.5%</span></label>
+              <input type="number" id="p-rdw" step="0.1" min="5" max="30" placeholder="e.g. 13.0" />
+            </div>
+            <div class="field-group">
+              <label>Serum Iron (μg/dL) <span class="hint">Normal: 60–170 μg/dL</span></label>
+              <input type="number" id="p-iron" step="1" min="0" max="400" placeholder="e.g. 80" />
+            </div>
+            <div class="field-group">
+              <label>Ferritin (ng/mL) <span class="hint">Normal: M 24–336 / F 11–307</span></label>
+              <input type="number" id="p-ferritin" step="0.1" min="0" max="1000" placeholder="e.g. 50.0" />
+            </div>
+            <div class="field-group">
+              <label>Transferrin Saturation (%) <span class="hint">Normal: 20–50%</span></label>
+              <input type="number" id="p-transferrin" step="0.1" min="0" max="100" placeholder="e.g. 30.0" />
+            </div>
+            <div class="field-group">
+              <label>Patient Age</label>
+              <input type="number" id="p-age" min="1" max="120" placeholder="e.g. 35" />
+            </div>
+            <div class="field-group">
+              <label>Biological Sex</label>
+              <select id="p-sex">
+                <option value="">Select…</option>
+                <option value="MALE">Male</option>
+                <option value="FEMALE">Female</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn-secondary" onclick="clearForm()">Clear</button>
+            <button class="btn-primary" onclick="runAnalysis()">
+              <span>Analyze with AI</span> <span class="btn-arrow">→</span>
+            </button>
+          </div>
+        </div>
+        <div class="card result-panel" id="result-panel">
+          <div class="result-waiting" id="result-waiting">
+            <div class="pulse-ring"></div>
+            <p>Enter parameters and click<br><strong>Analyze with AI</strong></p>
+          </div>
+          <div class="result-output hidden" id="result-output">
+            <div class="result-badge" id="result-badge"></div>
+            <h3 id="result-title"></h3>
+            <p id="result-description"></p>
+            <div class="result-metrics" id="result-metrics"></div>
+            <div class="result-confidence">
+              <span>AI Confidence</span>
+              <div class="confidence-bar"><div class="confidence-fill" id="conf-fill"></div></div>
+              <span id="conf-value"></span>
+            </div>
+            <div class="result-recommendations" id="result-recs"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VISUAL AI DETECTION -->
+    <section id="view-visual" class="view">
+      <div class="page-header">
+        <div>
+          <h1>Visual AI Detection</h1>
+          <p class="page-sub">Upload palm & eye photos for color-based anemia screening</p>
+        </div>
+      </div>
+
+      <div class="tip-box">
+        <span>💡</span>
+        <div>
+          <strong>How it works:</strong> Anemia reduces hemoglobin, making palms and inner eyelids appear pale or white instead of healthy pink. The AI analyzes color patterns in your photos to detect these signs.<br>
+          <strong>Tips for best results:</strong> Use bright natural light · Open palm fully · Pull lower eyelid down to expose the pink inner lining.
+        </div>
+      </div>
+
+      <div class="img-capture-grid">
+        <div class="img-capture-card">
+          <h3>🖐️ Palm Analysis</h3>
+          <p class="capture-desc">Open your palm fully under good lighting. Pale or white creases between fingers are a key anemia indicator.</p>
+          <div class="capture-zone" id="palm-zone">
+            <div class="cap-placeholder" id="palm-placeholder">
+              <div class="cap-icon">🖐️</div>
+              <div class="cap-hint">Upload or capture<br>your palm photo</div>
+            </div>
+            <img class="cap-preview" id="palm-preview" style="display:none;" alt="palm"/>
+          </div>
+          <div class="cap-btns">
+            <button class="cap-btn" onclick="openCam('palm')">📷 Camera</button>
+            <button class="cap-btn" onclick="document.getElementById('palm-file').click()">📁 Upload</button>
+            <button class="cap-btn" id="palm-clear-btn" style="display:none;" onclick="clearCap('palm')">✕ Clear</button>
+          </div>
+          <input type="file" id="palm-file" class="file-input" accept="image/*" onchange="handleFile(event,'palm')"/>
+        </div>
+
+        <div class="img-capture-card">
+          <h3>👁️ Eye Conjunctiva Analysis</h3>
+          <p class="capture-desc">Gently pull your lower eyelid down to expose the pink inner lining. Pale or white conjunctiva signals anemia.</p>
+          <div class="capture-zone" id="eye-zone">
+            <div class="cap-placeholder" id="eye-placeholder">
+              <div class="cap-icon">👁️</div>
+              <div class="cap-hint">Upload or capture<br>your eye photo</div>
+            </div>
+            <img class="cap-preview" id="eye-preview" style="display:none;" alt="eye"/>
+          </div>
+          <div class="cap-btns">
+            <button class="cap-btn" onclick="openCam('eye')">📷 Camera</button>
+            <button class="cap-btn" onclick="document.getElementById('eye-file').click()">📁 Upload</button>
+            <button class="cap-btn" id="eye-clear-btn" style="display:none;" onclick="clearCap('eye')">✕ Clear</button>
+          </div>
+          <input type="file" id="eye-file" class="file-input" accept="image/*" onchange="handleFile(event,'eye')"/>
+        </div>
+      </div>
+
+      <div class="combined-result" id="combined-result">
+        <h3>🤖 AI Analysis Results</h3>
+        <div id="score-bars"></div>
+        <div class="final-verdict" id="final-verdict"></div>
+        <p style="font-size:.68rem;color:#666;margin-top:14px;line-height:1.7;">
+          ⚕️ This is a visual screening tool only — not a medical diagnosis. Please consult a doctor and get a CBC blood test for confirmation.
+        </p>
+      </div>
+
+      <button class="btn-primary" id="visual-analyze-btn" onclick="runVisualAnalysis()" disabled
+        style="width:100%;padding:14px;font-size:1rem;">
+        <span>🤖 Analyze Images</span><span class="btn-arrow">→</span>
+      </button>
+    </section>
+
+    <!-- HISTORY -->
+    <section id="view-history" class="view">
+      <div class="page-header">
+        <div><h1>Test History</h1><p class="page-sub">All your past analyses</p></div>
+        <div class="filter-group">
+          <input type="text" id="history-search" placeholder="Search results…" oninput="filterHistory()" />
+        </div>
+      </div>
+      <div class="card">
+        <table class="history-table" id="history-table">
+          <thead>
+            <tr><th>Date</th><th>Hgb</th><th>MCV</th><th>RBC</th><th>Result</th><th>Confidence</th><th>Action</th></tr>
+          </thead>
+          <tbody id="history-tbody">
+            <tr><td colspan="7" class="empty-state">No history yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PROFILE -->
+    <section id="view-profile" class="view">
+      <div class="page-header">
+        <div><h1>Profile</h1><p class="page-sub">Manage your account</p></div>
+      </div>
+      <div class="profile-layout">
+        <div class="card profile-card">
+          <div class="profile-avatar-wrap">
+            <div class="profile-avatar" id="profile-avatar">J</div>
+            <div class="profile-badge" id="profile-role-badge">Patient</div>
+          </div>
+          <div class="field-group">
+            <label>First Name</label>
+            <input type="text" id="prof-firstname" />
+          </div>
+          <div class="field-group">
+            <label>Last Name</label>
+            <input type="text" id="prof-lastname" />
+          </div>
+          <div class="field-group">
+            <label>Email</label>
+            <input type="email" id="prof-email" readonly />
+          </div>
+          <div id="profile-msg" class="auth-error hidden"></div>
+          <button class="btn-primary" onclick="saveProfile()">Save Changes</button>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Change Password</h3></div>
+          <div class="field-group">
+            <label>Current Password</label>
+            <input type="password" id="pwd-current" placeholder="••••••••" />
+          </div>
+          <div class="field-group">
+            <label>New Password</label>
+            <input type="password" id="pwd-new" placeholder="Min. 8 characters" />
+          </div>
+          <div class="field-group">
+            <label>Confirm New Password</label>
+            <input type="password" id="pwd-confirm" placeholder="••••••••" />
+          </div>
+          <div id="pwd-msg" class="auth-error hidden"></div>
+          <button class="btn-primary" onclick="changePassword()">Update Password</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- EXISTING DETAIL MODAL -->
+<div id="detail-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <h3>Analysis Detail</h3>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<!-- CAMERA MODAL -->
+<div class="cam-modal-overlay" id="cam-modal">
+  <div class="cam-modal">
+    <button class="cam-close" onclick="closeCam()">✕</button>
+    <h3 id="cam-modal-title">📷 Capture Photo</h3>
+    <p id="cam-modal-hint">Position in frame and tap Capture.</p>
+    <div class="cam-video-wrap">
+      <video id="cam-video" autoplay playsinline></video>
+    </div>
+    <div class="cam-modal-btns">
+      <button class="btn-capture" onclick="snapPhoto()">📸 Capture</button>
+      <button class="btn-cam-cancel" onclick="closeCam()">Cancel</button>
+    </div>
+  </div>
+</div>
+<canvas id="snap-canvas" style="display:none;"></canvas>
+
+<div id="toast" class="toast hidden"></div>
+<script src="app.js"></script>
+<script>
+const visImgData = { palm: null, eye: null };
+let camStream = null, camTarget = null;
+
+function openCam(target) {
+  camTarget = target;
+  document.getElementById('cam-modal-title').textContent =
+    target === 'palm' ? '🖐️ Capture Palm Photo' : '👁️ Capture Eye Photo';
+  document.getElementById('cam-modal-hint').textContent =
+    target === 'palm'
+      ? 'Open your palm fully under bright light and center it in the frame.'
+      : 'Pull your lower eyelid down to show the pink inner lining, then capture.';
+  document.getElementById('cam-modal').classList.add('open');
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then(s => { camStream = s; document.getElementById('cam-video').srcObject = s; })
+    .catch(() => navigator.mediaDevices.getUserMedia({ video: true })
+      .then(s => { camStream = s; document.getElementById('cam-video').srcObject = s; })
+      .catch(() => { alert('Camera not available — please use Upload instead.'); closeCam(); })
+    );
+}
+
+function closeCam() {
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  document.getElementById('cam-modal').classList.remove('open');
+}
+
+function snapPhoto() {
+  const video = document.getElementById('cam-video');
+  const canvas = document.getElementById('snap-canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  setVisImage(camTarget, canvas.toDataURL('image/jpeg', 0.85));
+  closeCam();
+}
+
+function handleFile(e, target) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => setVisImage(target, ev.target.result);
+  reader.readAsDataURL(file);
+}
+
+function setVisImage(target, dataUrl) {
+  visImgData[target] = dataUrl;
+  document.getElementById(target + '-preview').src = dataUrl;
+  document.getElementById(target + '-preview').style.display = 'block';
+  document.getElementById(target + '-placeholder').style.display = 'none';
+  document.getElementById(target + '-clear-btn').style.display = 'flex';
+  const old = document.getElementById(target + '-ov');
+  if (old) old.remove();
+  document.getElementById('combined-result').classList.remove('show');
+  checkVisReady();
+}
+
+function clearCap(target) {
+  visImgData[target] = null;
+  document.getElementById(target + '-preview').style.display = 'none';
+  document.getElementById(target + '-preview').src = '';
+  document.getElementById(target + '-placeholder').style.display = 'flex';
+  document.getElementById(target + '-clear-btn').style.display = 'none';
+  const old = document.getElementById(target + '-ov');
+  if (old) old.remove();
+  document.getElementById('combined-result').classList.remove('show');
+  checkVisReady();
+}
+
+function checkVisReady() {
+  document.getElementById('visual-analyze-btn').disabled = !(visImgData.palm || visImgData.eye);
+}
+
+function analyzeColor(dataUrl, type) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const S = 100; canvas.width = S; canvas.height = S;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, S, S);
+      const cx = S/2, cy = S/2, radius = S/3;
+      const pixels = [];
+      for (let y = cy-radius; y < cy+radius; y++)
+        for (let x = cx-radius; x < cx+radius; x++) {
+          const d = ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data;
+          pixels.push({ r: d[0], g: d[1], b: d[2] });
+        }
+      const avg = pixels.reduce((a,p) => ({r:a.r+p.r,g:a.g+p.g,b:a.b+p.b}), {r:0,g:0,b:0});
+      avg.r /= pixels.length; avg.g /= pixels.length; avg.b /= pixels.length;
+      const r=avg.r/255, g=avg.g/255, b=avg.b/255;
+      const max=Math.max(r,g,b), min=Math.min(r,g,b);
+      const l=(max+min)/2;
+      const s=max===min?0:l>0.5?(max-min)/(2-max-min):(max-min)/(max+min);
+      let h=0;
+      if(max!==min){
+        if(max===r) h=((g-b)/(max-min))%6;
+        else if(max===g) h=(b-r)/(max-min)+2;
+        else h=(r-g)/(max-min)+4;
+        h=h*60; if(h<0)h+=360;
+      }
+      let score=0; const signals=[];
+      if(type==='palm'){
+        const isPink=(h>=330||h<=30)&&s>0.15&&l>0.45&&l<0.85;
+        const isPale=s<0.15||l>0.82||(l>0.7&&s<0.2);
+        const isYellow=h>=35&&h<=65&&l>0.65;
+        const bright=(avg.r*299+avg.g*587+avg.b*114)/1000;
+        if(isPale){score+=0.55;signals.push('Pale coloration');}
+        if(isYellow){score+=0.25;signals.push('Yellowish tint');}
+        if(!isPink&&!isPale){score+=0.2;signals.push('Reduced pink tone');}
+        if(s<0.1){score+=0.15;signals.push('Very low saturation');}
+        if(bright>200){score+=0.2;signals.push('Abnormally bright/white');}
+        if(avg.r<avg.g+20&&avg.r<avg.b+20){score+=0.1;signals.push('Low redness index');}
+      } else {
+        const isHealthy=(h>=320||h<=20)&&s>0.3&&l>0.35&&l<0.75;
+        const isPale=s<0.2||l>0.78;
+        const isVeryPale=s<0.1||l>0.85;
+        const pinkRatio=avg.r/(avg.g+1);
+        if(isVeryPale){score+=0.6;signals.push('Very pale conjunctiva');}
+        else if(isPale){score+=0.35;signals.push('Pale conjunctiva');}
+        if(!isHealthy){score+=0.2;signals.push('Reduced vessel visibility');}
+        if(avg.r<avg.g+15){score+=0.15;signals.push('Low red channel');}
+        if(pinkRatio<1.1){score+=0.15;signals.push('Poor pink ratio');}
+      }
+      score=Math.min(score,1);
+      resolve({anemic:score>=0.35, confidence:Math.min(0.45+score*0.55,0.94), score, signals});
+    };
+    img.src = dataUrl;
+  });
+}
+
+async function runVisualAnalysis() {
+  const btn = document.getElementById('visual-analyze-btn');
+  btn.innerHTML = '<span>Analyzing…</span>';
+  btn.disabled = true;
+  const results = {};
+  if(visImgData.palm){results.palm=await analyzeColor(visImgData.palm,'palm');showOverlay('palm',results.palm);}
+  if(visImgData.eye){results.eye=await analyzeColor(visImgData.eye,'eye');showOverlay('eye',results.eye);}
+  renderCombined(results);
+  btn.innerHTML = '<span>🤖 Analyze Images</span><span class="btn-arrow">→</span>';
+  btn.disabled = false;
+}
+
+function showOverlay(target, result) {
+  const old = document.getElementById(target+'-ov');
+  if(old) old.remove();
+  const ov = document.createElement('div');
+  ov.id = target+'-ov';
+  ov.className = 'cap-result-overlay '+(result.anemic?'anemic':'normal');
+  ov.innerHTML = `<div class="ov-icon">${result.anemic?'⚠️':'✅'}</div>
+    <div class="ov-text">${result.anemic?'Anemia Signs':'Looks Normal'}</div>
+    <div class="ov-conf">${Math.round(result.confidence*100)}% confidence</div>`;
+  document.getElementById(target+'-zone').appendChild(ov);
+}
+
+function renderCombined(results) {
+  document.getElementById('combined-result').classList.add('show');
+  let html='', total=0, count=0;
+  if(results.palm){
+    const pct=Math.round(results.palm.score*100); total+=results.palm.score; count++;
+    html+=`<div class="score-bar-row">
+      <div class="score-bar-label"><span>🖐️ Palm Score</span><span>${pct}%</span></div>
+      <div class="score-bar-track"><div class="score-bar-fill ${results.palm.anemic?'red':'green'}" style="width:${pct}%"></div></div>
+      ${results.palm.signals.length?`<div class="score-signals">Signals: ${results.palm.signals.join(' · ')}</div>`:''}</div>`;
+  }
+  if(results.eye){
+    const pct=Math.round(results.eye.score*100); total+=results.eye.score; count++;
+    html+=`<div class="score-bar-row">
+      <div class="score-bar-label"><span>👁️ Eye Score</span><span>${pct}%</span></div>
+      <div class="score-bar-track"><div class="score-bar-fill ${results.eye.anemic?'red':'green'}" style="width:${pct}%"></div></div>
+      ${results.eye.signals.length?`<div class="score-signals">Signals: ${results.eye.signals.join(' · ')}</div>`:''}</div>`;
+  }
+  document.getElementById('score-bars').innerHTML = html;
+  const avg=count?total/count:0, anemic=avg>=0.35;
+  const conf=Math.round(Math.min(0.45+avg*0.55,0.94)*100);
+  const v = document.getElementById('final-verdict');
+  v.className='final-verdict '+(anemic?'anemic':'normal');
+  v.innerHTML=`<div class="verdict-label">Final Verdict</div>
+    <div class="verdict-type ${anemic?'anemic':'normal'}">${anemic?'⚠️ Possible Anemia Detected':'✅ No Anemia Signs Detected'}</div>
+    <div class="verdict-conf">Combined confidence: ${conf}%</div>
+    <div class="verdict-note">${anemic
+      ?'Your images show signs consistent with anemia. Please consult a doctor and request a CBC blood test.'
+      :'Your images appear normal. If you still feel fatigued or dizzy, please consult a doctor.'
+    }</div>`;
+}
+</script>
+</body>
+</html>
